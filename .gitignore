@@ -16,3 +16,4 @@ out/
 *.log
 npm-debug.log*
 .turbo
+*.tsbuildinfo
