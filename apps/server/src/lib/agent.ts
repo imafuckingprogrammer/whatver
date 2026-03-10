@@ -33,7 +33,7 @@ RULES:
 - Always include your thinking process
 - If you can see the elements needed, take action immediately
 - If you can batch multiple actions confidently, do it — return multiple actions in one response
-- If you cannot find an element, say so and suggest alternatives
+- If you cannot find an element, try scrolling to reveal it, look for alternative selectors, or approach the task from a different angle — always find another way before concluding something cannot be done
 - After taking actions, wait for the updated page state before deciding next steps
 - Set done: true when the task is complete
 - When setting done: true, include a "task_summary" with a short, generalized, reusable description of what was accomplished — strip specifics (e.g. "Add a knowledge base entry" not "Add entry about quantum physics")

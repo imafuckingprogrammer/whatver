@@ -53,6 +53,18 @@ export function getWidgetScript(): string {
 
   var shadow = host.attachShadow({ mode: 'closed' });
 
+  // ── page overlay (on document.body — covers the page while agent acts) ───
+  var agOverlay = document.createElement('div');
+  agOverlay.style.cssText = [
+    'position:fixed', 'top:0', 'left:0', 'width:100%', 'height:100%',
+    'background:rgba(0,0,0,0.18)', 'z-index:2147483640', 'pointer-events:none',
+    'opacity:0', 'transition:opacity .2s',
+  ].join(';');
+  document.body.appendChild(agOverlay);
+
+  function showOverlay() { agOverlay.style.opacity = '1'; }
+  function hideOverlay() { agOverlay.style.opacity = '0'; }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // DOM DISTILLATION
   // ═══════════════════════════════════════════════════════════════════════════
@@ -83,7 +95,7 @@ export function getWidgetScript(): string {
       );
 
       var position = rect.bottom < 0 ? 'above-fold' : rect.top > foldH ? 'below-fold' : 'in-view';
-      var rawText  = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+      var rawText  = (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
       var entry    = { tag: tag, visible: visible, position: position };
 
       if (el.id)                            entry.id          = el.id;
@@ -98,7 +110,7 @@ export function getWidgetScript(): string {
       if (el.getAttribute('aria-checked'))  entry.checked     = el.getAttribute('aria-checked');
       if (el.hasAttribute('disabled'))      entry.disabled    = true;
 
-      var classes = (el.className || '').toString().split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
+      var classes = (el.className || '').toString().split(/\\s+/).filter(Boolean).slice(0, 3).join(' ');
       if (classes) entry.classes = classes;
 
       if (tag === 'input' || tag === 'textarea' || tag === 'select') {
@@ -158,6 +170,27 @@ export function getWidgetScript(): string {
     return true;
   }
 
+  // ── element highlight (outlines target on the page before acting) ────────
+  function highlightEl(selector) {
+    if (!selector) return;
+    var el = findEl(selector);
+    if (!el) return;
+    var prevOutline    = el.style.outline;
+    var prevOffset     = el.style.outlineOffset;
+    var prevShadow     = el.style.boxShadow;
+    var prevTransition = el.style.transition;
+    el.style.transition   = 'outline .1s,box-shadow .1s';
+    el.style.outline      = '2px solid rgba(139,92,246,.75)';
+    el.style.outlineOffset = '2px';
+    el.style.boxShadow    = '0 0 0 4px rgba(139,92,246,.12)';
+    setTimeout(function () {
+      el.style.outline      = prevOutline;
+      el.style.outlineOffset = prevOffset;
+      el.style.boxShadow    = prevShadow;
+      el.style.transition   = prevTransition;
+    }, 950);
+  }
+
   window.__agentActions = { clickElement: clickElement, typeInElement: typeInElement,
     scrollToElement: scrollToElement, scrollPage: scrollPage, distillDOM: distillDOM };
 
@@ -200,10 +233,16 @@ export function getWidgetScript(): string {
     '.msg.u{align-self:flex-end;align-items:flex-end;}',
     '.msg.a{align-self:flex-start;align-items:flex-start;}',
     '.msg.err{align-self:center;}',
-    // action step pills
-    '.msg.act{align-self:center;max-width:94%;}',
-    '.msg.act .bbl{background:rgba(255,255,255,0.03);color:#52525b;font-size:11.5px;',
-    '  padding:3px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.06);}',
+    // action step pills — spinner while executing, checkmark when done
+    '.msg.act{align-self:flex-start;max-width:90%;}',
+    '.msg.act .bbl{display:flex;align-items:center;gap:5px;',
+    '  background:rgba(255,255,255,0.02);color:#71717a;font-size:11.5px;',
+    '  padding:4px 10px 4px 8px;border-radius:20px;border:1px solid rgba(255,255,255,0.05);}',
+    '.msg.act.done .bbl{color:#3f3f46;border-color:rgba(255,255,255,0.04);}',
+    '.spin{width:10px;height:10px;border-radius:50%;flex-shrink:0;',
+    '  border:1.5px solid rgba(255,255,255,0.08);border-top-color:#52525b;',
+    '  animation:rot .65s linear infinite;}',
+    '@keyframes rot{to{transform:rotate(360deg);}}',
     '.bbl{padding:9px 13px;font-size:13px;line-height:1.55;word-break:break-word;white-space:pre-wrap;color:#e4e4e7;}',
     '.msg.u .bbl{background:#27272a;border:1px solid rgba(255,255,255,0.07);border-radius:13px 13px 3px 13px;}',
     '.msg.a .bbl{background:#18181b;border:1px solid rgba(255,255,255,0.06);border-radius:13px 13px 13px 3px;}',
@@ -298,6 +337,45 @@ export function getWidgetScript(): string {
     if (t) t.remove();
   }
 
+  // ── action pill helpers ──────────────────────────────────────────────────
+  function showActionPill(description) {
+    if (msgCount === 0) empty.style.display = 'none';
+    msgCount++;
+    var row = document.createElement('div');
+    row.className = 'msg act';
+    var bbl = document.createElement('div');
+    bbl.className = 'bbl';
+    var spinEl = document.createElement('div');
+    spinEl.className = 'spin';
+    bbl.appendChild(spinEl);
+    bbl.appendChild(document.createTextNode('\u00a0' + (description || 'Acting...')));
+    row.appendChild(bbl);
+    msgs.appendChild(row);
+    scrollBottom();
+    return row;
+  }
+
+  function resolveActionPill(row, description) {
+    row.classList.add('done');
+    var bbl = row.querySelector('.bbl');
+    if (!bbl) return;
+    bbl.innerHTML = '';
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '10'); svg.setAttribute('height', '10');
+    svg.setAttribute('viewBox', '0 0 10 10');
+    svg.style.cssText = 'flex-shrink:0;display:inline-block;vertical-align:middle;';
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M1.5 5l2.5 2.5 4.5-4.5');
+    path.setAttribute('stroke', '#3f3f46');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('fill', 'none');
+    svg.appendChild(path);
+    bbl.appendChild(svg);
+    bbl.appendChild(document.createTextNode('\u00a0' + (description || 'Done')));
+  }
+
   // ── open / close ─────────────────────────────────────────────────────────
   function toggle() {
     isOpen = !isOpen;
@@ -312,22 +390,35 @@ export function getWidgetScript(): string {
     if (e.key === 'Escape' && isOpen) toggle();
   });
 
-  // ── action execution ─────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTION EXECUTION — real-time feed with spinner → checkmark per step
+  // ═══════════════════════════════════════════════════════════════════════════
   function executeActions(actions, onComplete) {
     if (!actions || actions.length === 0) { onComplete(); return; }
+    showOverlay();
     var idx = 0;
     function next() {
-      if (idx >= actions.length) { setTimeout(onComplete, 800); return; }
+      if (idx >= actions.length) {
+        hideOverlay();
+        setTimeout(onComplete, 800);
+        return;
+      }
       var action = actions[idx++];
-      try {
-        if      (action.type === 'click')  { clickElement(action.selector); }
-        else if (action.type === 'type')   { typeInElement(action.selector, action.text || ''); }
-        else if (action.type === 'scroll') {
-          if (action.selector) { scrollToElement(action.selector); }
-          else                 { scrollPage(action.direction || 'down'); }
-        }
-      } catch (e) { console.error('[agent widget] action error:', action, e); }
-      setTimeout(next, 700);
+      var pill = showActionPill(action.description || 'Acting...');
+      highlightEl(action.selector);
+      // Brief pause so browser paints the spinner before the action fires
+      setTimeout(function () {
+        try {
+          if      (action.type === 'click')  { clickElement(action.selector); }
+          else if (action.type === 'type')   { typeInElement(action.selector, action.text || ''); }
+          else if (action.type === 'scroll') {
+            if (action.selector) { scrollToElement(action.selector); }
+            else                 { scrollPage(action.direction || 'down'); }
+          }
+        } catch (e) { console.error('[agent widget] action error:', action, e); }
+        resolveActionPill(pill, action.description || 'Done');
+        setTimeout(next, 700);
+      }, 80);
     }
     next();
   }
@@ -346,11 +437,6 @@ export function getWidgetScript(): string {
     var actions = data.actions || [];
 
     if (actions.length > 0) {
-      for (var i = 0; i < actions.length; i++) {
-        if (actions[i].description) {
-          appendMessage('act', '\u2192 ' + actions[i].description);
-        }
-      }
       executeActions(actions, function () {
         if (data.done) { setLoading(false); loopCount = 0; }
         else           { sendContinuation(); }

@@ -123,24 +123,31 @@ export function SitesSection({ sites }: { sites: Site[] }) {
             return (
               <div
                 key={site.id}
-                className="flex items-start gap-4 px-5 py-4 hover:bg-muted/40 transition-colors"
+                className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors"
               >
                 {/* Site info */}
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-3 mb-1.5">
                     <Link
                       href={`/dashboard/sites/${site.id}`}
-                      className="text-sm font-medium hover:underline underline-offset-4 truncate"
+                      className="text-sm font-medium hover:underline underline-offset-4"
                     >
                       {site.name}
                     </Link>
                     <span className="text-xs text-muted-foreground truncate">
                       {site.domain}
                     </span>
+                    <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                      {new Date(site.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
                   </div>
 
                   {/* Script tag */}
-                  <div className="flex items-center gap-1 bg-muted/60 rounded-md px-3 py-1.5">
+                  <div className="flex items-center gap-1 bg-muted/40 rounded-md px-3 py-1.5">
                     <code className="text-xs font-mono text-muted-foreground flex-1 truncate">
                       {tag}
                     </code>
@@ -151,7 +158,7 @@ export function SitesSection({ sites }: { sites: Site[] }) {
                 {/* Arrow to detail */}
                 <Link
                   href={`/dashboard/sites/${site.id}`}
-                  className="shrink-0 self-center text-muted-foreground hover:text-foreground transition-colors"
+                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label={`Open ${site.name}`}
                 >
                   <ChevronRight className="h-4 w-4" />

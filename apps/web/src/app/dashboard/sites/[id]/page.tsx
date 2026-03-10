@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { CopyButton } from "@/app/dashboard/copy-button";
+import { SiteDetailTabs } from "./site-detail-tabs";
 
 const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL ?? "http://localhost:3001";
@@ -21,13 +21,53 @@ export default async function SiteDetailPage({ params }: Props) {
 
   const { data: site } = await supabase
     .from("sites")
-    .select("id, name, domain, site_key, config, created_at")
+    .select("id, name, domain, site_key, created_at")
     .eq("id", id)
     .single();
 
   if (!site) notFound();
 
-  const tag = `<script src="${SERVER_URL}/embed/${site.site_key}.js"></script>`;
+  // Stats
+  const { count: totalConversations } = await supabase
+    .from("conversations")
+    .select("id", { count: "exact", head: true })
+    .eq("site_id", site.id);
+
+  const { data: actionRows } = await supabase
+    .from("agent_actions")
+    .select("steps")
+    .eq("site_id", site.id)
+    .eq("success", true);
+
+  const totalActions = (actionRows ?? []).reduce(
+    (sum: number, r: { steps: unknown }) =>
+      sum + (Array.isArray(r.steps) ? r.steps.length : 0),
+    0
+  );
+
+  // Recent conversations
+  const { data: conversations } = await supabase
+    .from("conversations")
+    .select("id, visitor_id, created_at, updated_at")
+    .eq("site_id", site.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const scriptTag = `<script src="${SERVER_URL}/embed/${site.site_key}.js"></script>`;
+
+  const details = [
+    { label: "Site ID", value: site.id },
+    { label: "Site key", value: site.site_key },
+    { label: "Domain", value: site.domain },
+    {
+      label: "Created",
+      value: new Date(site.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -45,59 +85,24 @@ export default async function SiteDetailPage({ params }: Props) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full space-y-10">
-        {/* Overview */}
-        <section className="space-y-1">
+      <main className="flex-1 max-w-5xl mx-auto px-6 py-10 w-full">
+        <div className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">{site.name}</h1>
-          <p className="text-sm text-muted-foreground">{site.domain}</p>
-        </section>
+          <p className="text-sm text-muted-foreground mt-1">{site.domain}</p>
+        </div>
 
-        {/* Install */}
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-sm font-medium">Install</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Paste this script tag before the closing{" "}
-              <code className="font-mono">&lt;/body&gt;</code> on your site.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 border border-border rounded-lg px-4 py-3">
-            <code className="text-sm font-mono text-muted-foreground flex-1 break-all">
-              {tag}
-            </code>
-            <CopyButton text={tag} />
-          </div>
-        </section>
-
-        {/* Metadata */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium">Details</h2>
-          <dl className="divide-y divide-border border border-border rounded-lg overflow-hidden">
-            {[
-              { label: "Site ID", value: site.id },
-              { label: "Site key", value: site.site_key },
-              { label: "Domain", value: site.domain },
-              {
-                label: "Created",
-                value: new Date(site.created_at).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                }),
-              },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex px-4 py-3 gap-4">
-                <dt className="text-xs text-muted-foreground w-24 shrink-0 pt-px">
-                  {label}
-                </dt>
-                <dd className="text-xs font-mono text-foreground break-all">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        <SiteDetailTabs
+          scriptTag={scriptTag}
+          totalConversations={totalConversations ?? 0}
+          totalActions={totalActions}
+          conversations={(conversations ?? []) as Array<{
+            id: string;
+            visitor_id: string;
+            created_at: string;
+            updated_at: string | null;
+          }>}
+          details={details}
+        />
       </main>
     </div>
   );
