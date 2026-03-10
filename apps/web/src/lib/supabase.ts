@@ -1,6 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Use the scoped helpers instead:
+//   import { createClient } from "@/lib/supabase/client"  ← client components
+//   import { createClient } from "@/lib/supabase/server"  ← server components
+export { createClient } from "./supabase/client";
