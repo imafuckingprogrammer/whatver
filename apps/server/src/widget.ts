@@ -54,16 +54,32 @@ export function getWidgetScript(): string {
   var shadow = host.attachShadow({ mode: 'closed' });
 
   // ── page overlay (on document.body — covers the page while agent acts) ───
+  var agStyle = document.createElement('style');
+  agStyle.textContent = [
+    '@keyframes ag-pulse {',
+    '  0%,100%{ box-shadow:inset 0 0 0 2px rgba(99,179,237,0.55),inset 0 0 32px rgba(99,179,237,0.08); }',
+    '  50%   { box-shadow:inset 0 0 0 2px rgba(99,179,237,0.9), inset 0 0 48px rgba(99,179,237,0.18); }',
+    '}',
+  ].join('');
+  document.head.appendChild(agStyle);
+
   var agOverlay = document.createElement('div');
   agOverlay.style.cssText = [
     'position:fixed', 'top:0', 'left:0', 'width:100%', 'height:100%',
-    'background:rgba(0,0,0,0.18)', 'z-index:2147483640', 'pointer-events:none',
-    'opacity:0', 'transition:opacity .2s',
+    'background:rgba(0,0,0,0.22)', 'z-index:2147483640', 'pointer-events:none',
+    'opacity:0', 'transition:opacity .25s ease',
+    'box-shadow:inset 0 0 0 2px rgba(99,179,237,0.55),inset 0 0 32px rgba(99,179,237,0.08)',
   ].join(';');
   document.body.appendChild(agOverlay);
 
-  function showOverlay() { agOverlay.style.opacity = '1'; }
-  function hideOverlay() { agOverlay.style.opacity = '0'; }
+  function showOverlay() {
+    agOverlay.style.opacity = '1';
+    agOverlay.style.animation = 'ag-pulse 2s ease-in-out infinite';
+  }
+  function hideOverlay() {
+    agOverlay.style.opacity = '0';
+    agOverlay.style.animation = 'none';
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DOM DISTILLATION
