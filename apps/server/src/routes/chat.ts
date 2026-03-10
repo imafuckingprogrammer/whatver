@@ -61,6 +61,19 @@ router.post("/", async (req: Request, res: Response) => {
         return;
       }
       conversationId = newConv.id as string;
+    } else {
+      // Verify the conversation belongs to this site — prevents cross-site injection
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("id", conversationId)
+        .eq("site_id", site.id)
+        .single();
+
+      if (!existing) {
+        res.status(403).json({ error: "Conversation not found" });
+        return;
+      }
     }
 
     // 3. Load history BEFORE storing the new message ─────────────────────────
