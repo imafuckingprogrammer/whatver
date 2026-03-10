@@ -1,0 +1,19 @@
+{
+  "name": "embeddable-ai-agent",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:server": "npm run dev --workspace=apps/server",
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:server\"",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:server": "npm run build --workspace=apps/server",
+    "build": "npm run build:web && npm run build:server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
