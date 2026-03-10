@@ -25,7 +25,8 @@ Return a JSON object with this structure:
     {"type": "type", "selector": "#input-id", "text": "the text to type", "description": "Filling in email field"}
   ],
   "message": "Optional message to show the user about what you're doing or what you found",
-  "done": false
+  "done": false,
+  "task_summary": "A generalized description of what was accomplished (only when done: true)"
 }
 
 RULES:
@@ -35,6 +36,7 @@ RULES:
 - If you cannot find an element, say so and suggest alternatives
 - After taking actions, wait for the updated page state before deciding next steps
 - Set done: true when the task is complete
+- When setting done: true, include a "task_summary" with a short, generalized, reusable description of what was accomplished — strip specifics (e.g. "Add a knowledge base entry" not "Add entry about quantum physics")
 - If the user is just chatting (not asking you to do something on the page), respond conversationally with message only and no actions
 - Never make up elements that aren't in the DOM list
 - Use the most specific selector available: prefer id, then unique text content, then class`;
@@ -52,6 +54,7 @@ export interface AgentResult {
   actions: AgentAction[];
   message: string | null;
   done: boolean;
+  task_summary: string | null;
 }
 
 export interface LLMMessage {
@@ -72,9 +75,9 @@ export async function runAgent(params: {
   let systemPrompt = SYSTEM_PROMPT;
   if (pastActions.length > 0) {
     systemPrompt +=
-      "\n\nPAST SUCCESSFUL ACTIONS ON THIS SITE (use as reference if relevant):";
+      "\n\nOn this site, these tasks have been completed successfully before:";
     for (const pa of pastActions.slice(0, 3)) {
-      systemPrompt += `\n\nTask: "${pa.task_description}"\nSteps: ${JSON.stringify(pa.steps)}`;
+      systemPrompt += `\n- Task: '${pa.task_description}' — Steps: ${JSON.stringify(pa.steps)}`;
     }
   }
 
@@ -120,5 +123,9 @@ export async function runAgent(params: {
         ? parsed.message
         : null,
     done: Boolean(parsed.done),
+    task_summary:
+      typeof parsed.task_summary === "string" && parsed.task_summary
+        ? parsed.task_summary
+        : null,
   };
 }

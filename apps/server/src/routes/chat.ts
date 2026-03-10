@@ -132,7 +132,10 @@ router.post("/", async (req: Request, res: Response) => {
     // 9. On completion, persist the action sequence as site memory ────────────
     if (agentResult.done) {
       const rows = historyRows ?? [];
+      // Prefer agent-generated summary (generalized, reusable);
+      // fall back to first user message if the agent didn't provide one
       const taskDescription =
+        agentResult.task_summary ??
         rows.find((r) => r.role === "user")?.content ??
         (isActionResult ? "" : message!.trim());
 
