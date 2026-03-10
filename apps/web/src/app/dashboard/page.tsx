@@ -1,6 +1,15 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SignOutButton } from "./sign-out-button";
+import { SitesSection } from "./sites-section";
+
+export type Site = {
+  id: string;
+  name: string;
+  domain: string;
+  site_key: string;
+  created_at: string;
+};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -8,9 +17,12 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
+
+  const { data: sites } = await supabase
+    .from("sites")
+    .select("id, name, domain, site_key, created_at")
+    .order("created_at", { ascending: false });
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -25,7 +37,7 @@ export default async function DashboardPage() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome</h1>
+        <SitesSection sites={(sites as Site[]) ?? []} />
       </main>
     </div>
   );
