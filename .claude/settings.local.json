@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:server:*)",
+      "Bash(timeout 5 npm run dev:*)",
+      "Bash(find:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.multion.ai)",
+      "WebFetch(domain:github.com)",
+      "Bash(timeout 5 npx tsx:*)",
+      "Bash(pkill:*)",
+      "WebFetch(domain:openai.com)",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:www.skyvern.com)",
+      "WebFetch(domain:som-gpt4v.github.io)",
+      "Bash(node -e:*)",
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:www.emergence.ai)",
+      "WebFetch(domain:webmarker-docs.vercel.app)",
+      "WebFetch(domain:www.reidbarber.com)",
+      "WebFetch(domain:aminforoutan.com)",
+      "WebFetch(domain:docs.agentql.com)",
+      "Bash(echo:*)",
+      "Bash(grep:*)",
+      "Bash(taskkill:*)",
+      "Bash(killall:*)",
+      "WebFetch(domain:www.ycombinator.com)",
+      "WebFetch(domain:developers.openai.com)"
+    ]
+  }
+}

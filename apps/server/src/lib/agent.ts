@@ -1,60 +1,95 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-const SYSTEM_PROMPT = `You are an AI agent embedded on a website. You can see the interactive elements on the current page and take actions on behalf of the user.
+const SYSTEM_PROMPT = `You are a browser automation agent. You execute tasks by interacting with web pages.
 
-CAPABILITIES:
-- click: Click a button, link, or interactive element
-- type: Type text into an input field
-- scroll: Scroll the page or scroll to a specific element
-- respond: Send a text message to the user
+## INPUT FORMAT
 
-WHAT YOU RECEIVE:
-- The user's message
-- A list of interactive elements currently on the page with their identifiers
-- Your conversation history with the user
-- Past successful action sequences on this site (if any)
+You receive:
+- PAGE URL and TITLE — tells you where you are
+- VISIBLE TEXT — content on screen (headings #1/#2/#3, text >"...", alerts !ALERT)
+- INTERACTIVE ELEMENTS — indexed: [1]button"Submit", [2]input"Email"="value", [3]link"Settings"
 
-HOW TO RESPOND:
-Return a JSON object with this structure:
+## OUTPUT FORMAT (JSON)
+
 {
-  "thinking": "Brief reasoning about what you see and what you should do next",
-  "actions": [
-    {"type": "click", "selector": "#element-id", "description": "Clicking the submit button"},
-    {"type": "type", "selector": "#input-id", "text": "the text to type", "description": "Filling in email field"}
+  "thinking": "1) Current page: [describe]. 2) Goal progress: [what's done/remaining]. 3) Next step: [specific action]",
+  "plan": [
+    {"step": 1, "task": "Sign in", "status": "done"},
+    {"step": 2, "task": "Delete RandomSite", "status": "active"},
+    {"step": 3, "task": "Create new site", "status": "pending"}
   ],
-  "message": "Optional message to show the user about what you're doing or what you found",
-  "done": false,
-  "task_summary": "A generalized description of what was accomplished (only when done: true)"
+  "actions": [
+    {"type": "click", "index": 3}
+  ],
+  "speak": "Short status for user...",
+  "done": false
 }
 
-RULES:
-- Always include your thinking process
-- If you can see the elements needed, take action immediately
-- If you can batch multiple actions confidently, do it — return multiple actions in one response
-- If you cannot find an element, try scrolling to reveal it, look for alternative selectors, or approach the task from a different angle — always find another way before concluding something cannot be done
-- After taking actions, wait for the updated page state before deciding next steps
-- Set done: true when the task is complete
-- When setting done: true, include a "task_summary" with a short, generalized, reusable description of what was accomplished — strip specifics (e.g. "Add a knowledge base entry" not "Add entry about quantum physics")
-- If the user is just chatting (not asking you to do something on the page), respond conversationally with message only and no actions
-- Never make up elements that aren't in the DOM list
-- Use the most specific selector available: prefer id, then unique text content, then class`;
+## ACTIONS
+
+{"type":"click","index":N} — click element N
+{"type":"type","index":N,"text":"..."} — type into input (clears existing value)
+{"type":"select","index":N,"value":"..."} — select dropdown option
+{"type":"scroll","direction":"up|down"} — scroll page
+{"type":"complete","result":"Final message to user"} — task finished
+
+## PLAN TRACKING (CRITICAL)
+
+Your "plan" array is YOUR MEMORY. Update it every turn:
+- "done" = completed successfully
+- "active" = working on now
+- "pending" = not started yet
+
+This prevents repeating actions. If you already did something, mark it "done" and move on.
+
+## ACTION BATCHING
+
+You can batch SAFE actions together:
+- Multiple type() in same form = OK: [type email, type password, click submit]
+- Multiple scroll() = OK
+
+You must NOT batch:
+- Actions across different pages (click link = new page, stop there)
+- Destructive actions (delete, submit payment, etc.) — one at a time
+
+## RULES
+
+1. **READ THE URL** — The URL tells you what page you're on. "/dashboard" is different from "/dashboard/sites/abc"
+
+2. **ONE NAVIGATION PER TURN** — After clicking ANY link/button that navigates, STOP. Return only that action. Wait for new DOM.
+
+3. **UPDATE YOUR PLAN** — Every response must include your updated plan with correct statuses.
+
+4. **COMPLETE WHEN DONE** — When all plan items are "done", set done:true with a helpful result message.
+
+5. **OBSERVE BEFORE ACTING** — If the page looks different than expected, update your thinking. Don't blindly repeat actions.
+
+JSON only. No markdown fences.`;
 
 export interface AgentAction {
-  type: "click" | "type" | "scroll";
-  selector?: string;
+  type: "click" | "type" | "select" | "scroll" | "hover" | "complete";
+  index?: number;
   text?: string;
+  value?: string;
   direction?: "up" | "down";
-  description: string;
+  result?: string;
 }
 
-export interface AgentResult {
+export interface PlanStep {
+  step: number;
+  task: string;
+  status: "done" | "active" | "pending";
+}
+
+export interface AgentResponse {
   thinking: string;
+  plan: PlanStep[];
   actions: AgentAction[];
-  message: string | null;
+  speak: string;
   done: boolean;
-  task_summary: string | null;
 }
 
 export interface LLMMessage {
@@ -62,70 +97,88 @@ export interface LLMMessage {
   content: string;
 }
 
-export async function runAgent(params: {
-  history: LLMMessage[];
-  userMessage: string | null;
-  dom: Record<string, unknown>[];
-  isActionResult: boolean;
-  pastActions: Array<{ task_description: string; steps: unknown }>;
-}): Promise<AgentResult> {
-  const { history, userMessage, dom, isActionResult, pastActions } = params;
+export async function runAgent(
+  history: LLMMessage[],
+  dom: string,
+  goal: string,
+  previousPlan: PlanStep[],
+  lastObservation?: string
+): Promise<AgentResponse> {
+  // Build user content
+  let userContent = `## GOAL\n${goal}\n\n`;
 
-  // Append past-actions context to system prompt
-  let systemPrompt = SYSTEM_PROMPT;
-  if (pastActions.length > 0) {
-    systemPrompt +=
-      "\n\nOn this site, these tasks have been completed successfully before:";
-    for (const pa of pastActions.slice(0, 3)) {
-      systemPrompt += `\n- Task: '${pa.task_description}' — Steps: ${JSON.stringify(pa.steps)}`;
-    }
+  // Include previous plan so agent has memory
+  if (previousPlan.length > 0) {
+    userContent += `## YOUR CURRENT PLAN\n`;
+    previousPlan.forEach((p) => {
+      const marker = p.status === "done" ? "✓" : p.status === "active" ? "→" : "○";
+      userContent += `${marker} Step ${p.step}: ${p.task} [${p.status}]\n`;
+    });
+    userContent += `\n`;
   }
 
-  // Build the content for the current turn
-  const domStr = JSON.stringify(dom);
-  const currentContent = isActionResult
-    ? `[Actions executed. Updated page — ${dom.length} elements:]\n${domStr}`
-    : `${userMessage}\n\nCurrent page — ${dom.length} interactive elements:\n${domStr}`;
+  // Include last actions so agent knows what it just did
+  if (lastObservation) {
+    userContent += `## LAST ACTIONS RESULT\n${lastObservation}\n\n`;
+  }
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-    max_tokens: 1024,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...history,
-      { role: "user", content: currentContent },
-    ],
+  userContent += `## CURRENT PAGE\n${dom}`;
+
+  // Build chat history for Gemini
+  const chatHistory = history.map((msg) => ({
+    role: msg.role === "assistant" ? "model" : "user",
+    parts: [{ text: msg.content }],
+  }));
+
+  const chat = model.startChat({
+    history: chatHistory,
+    generationConfig: {
+      temperature: 0.15,
+      maxOutputTokens: 800,
+    },
+    systemInstruction: {
+      role: "user",
+      parts: [{ text: SYSTEM_PROMPT }],
+    },
   });
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
+  const result = await chat.sendMessage(userContent);
+  const raw = result.response.text() ?? "{}";
+  const usage = result.response.usageMetadata;
 
-  let parsed: Record<string, unknown>;
+  console.log(`[agent] ${usage?.promptTokenCount || 0}in/${usage?.candidatesTokenCount || 0}out tokens`);
+
   try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    parsed = {
-      thinking: "Parse error",
-      message: "I ran into an issue. Please try again.",
+    const cleaned = raw.replace(/```json\n?|\n?```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    // Extract and validate response
+    const plan: PlanStep[] = Array.isArray(parsed.plan) ? parsed.plan : [];
+    const actions: AgentAction[] = Array.isArray(parsed.actions) ? parsed.actions :
+      (parsed.action ? [parsed.action] : []);
+    const done = Boolean(parsed.done);
+
+    // Log for debugging
+    console.log(`[agent] thinking: ${(parsed.thinking || "").slice(0, 80)}...`);
+    console.log(`[agent] plan: ${plan.map(p => `${p.status[0]}:${p.task.slice(0,15)}`).join(", ")}`);
+    console.log(`[agent] actions: ${actions.map(a => `${a.type}(${a.index ?? ""})`).join(", ") || "none"}`);
+    console.log(`[agent] done: ${done}`);
+
+    return {
+      thinking: parsed.thinking || "",
+      plan,
+      actions,
+      speak: parsed.speak || "",
+      done,
+    };
+  } catch (e) {
+    console.error("[agent] parse error:", raw.slice(0, 200));
+    return {
+      thinking: "Failed to parse response",
+      plan: previousPlan,
       actions: [],
-      done: true,
+      speak: "Something went wrong.",
+      done: false,
     };
   }
-
-  return {
-    thinking: typeof parsed.thinking === "string" ? parsed.thinking : "",
-    actions: Array.isArray(parsed.actions)
-      ? (parsed.actions as AgentAction[])
-      : [],
-    message:
-      typeof parsed.message === "string" && parsed.message
-        ? parsed.message
-        : null,
-    done: Boolean(parsed.done),
-    task_summary:
-      typeof parsed.task_summary === "string" && parsed.task_summary
-        ? parsed.task_summary
-        : null,
-  };
 }

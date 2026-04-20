@@ -1,0 +1,38 @@
+=== AGENT DOM SNAPSHOT ===
+URL: http://localhost:3000/dashboard
+Title: Embeddable AI Agent
+
+=== ELEMENTS ===
+[1]btn"Open Next.js Dev Tools"[closed]
+>"Agent"
+[2]a"a3306device@gmail.com"
+[3]btn"Sign out"
+#2"Sites"
+[4]btn"New site"
+[5]a"Ada Wong"
+>"adawong.com"
+>"Mar 20, 2026"
+>"<script src="http://localhost:3001/embed/bpwtohqc0y.js"></script>"
+[6]btn"Copy to clipboard"
+[7]a"Open Ada Wong"
+[8]a"Ada Wong"
+>"<script src="http://localhost:3001/embed/mezqvo9fck.js"></script>"
+[9]btn"Copy to clipboard"
+[10]a"Open Ada Wong"
+[11]a"Jill Valentine"
+>"jillvalentine.com"
+>"<script src="http://localhost:3001/embed/p31y4lvax6.js"></script>"
+[12]btn"Copy to clipboard"
+[13]a"Open Jill Valentine"
+[14]a"Leon S. Kennedy"
+>"leon-kennedy.com"
+>"Mar 19, 2026"
+>"<script src="http://localhost:3001/embed/f9ini7b09y.js"></script>"
+[15]btn"Copy to clipboard"
+[16]a"Open Leon S. Kennedy"
+[17]a"somethin"
+>"localhost:3000"
+>"Mar 10, 2026"
+>"<script src="http://localhost:3001/embed/ivre94fxtd.js"></script>"
+[18]btn"Copy to clipboard"
+[19]a"Open somethin"
